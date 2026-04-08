@@ -11,6 +11,43 @@ const registrationSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters')
 })
 
+const donorDetailsSchema = z.object({
+  userId: z.uuid('Invalid userId'),
+  phoneNumber: z.string().regex(/^\+?[0-9]{9,12}$/, 'Enter a valid phone number'),
+  district: z.enum([
+    "Ampara",
+    "Anuradhapura",
+    "Badulla",
+    "Batticaloa",
+    "Bexley",
+    "Colombo",
+    "Galle",
+    "Gampaha",
+    "Hambantota",
+    "Jaffna",
+    "Kalutara",
+    "Kandy",
+    "Kegalle",
+    "Kilinochchi",
+    "Kurunegala",
+    "Matale",
+    "Matara",
+    "Monaragala",
+    "Mullaitivu",
+    "Nuwara Eliya",
+    "Polonnaruwa",
+    "Puttalam",
+    "Ratnapura",
+    "Trincomalee",
+    "Vavuniya",
+    "Hambanthota"
+  ]),
+  bloodType: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']),
+  gender: z.enum(['Male', 'Female', 'Other']),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be YYYY-MM-DD'),
+  weightKg: z.coerce.number().gte(50, 'Minimum 50kg required')
+})
+
 authRoutes.post('/register', async (c) => {
   const supabase = getSupabase(c)
   const payload = await c.req.json()
@@ -62,7 +99,7 @@ authRoutes.post('/register', async (c) => {
 
     return donorError
       ? c.json({ message: 'Registration failed' }, 500)
-      : c.json({ message: 'Registration successfull' })
+      : c.json({ message: 'Registration successfull', userId })
 
 
   } catch (authError) {
@@ -70,4 +107,47 @@ authRoutes.post('/register', async (c) => {
     return c.json({ message: `Error while signing up: ${message}` }, 500)
   }
 
+})
+
+authRoutes.post('/register/details', async (c) => {
+  const supabase = getSupabase(c)
+  const payload = await c.req.json()
+
+  try {
+    const validated = donorDetailsSchema.safeParse(payload)
+
+    if (!validated.success) {
+      return c.json(
+        { message: `Invalid donor details: ${z.prettifyError(validated.error)}` },
+        400,
+      )
+    }
+
+    const { data: updatedDonor, error } = await supabase
+      .from('donors')
+      .update({
+        phone_number: validated.data.phoneNumber,
+        district: validated.data.district,
+        blood_type: validated.data.bloodType,
+        gender: validated.data.gender,
+        date_of_birth: validated.data.dateOfBirth,
+        weight_kg: validated.data.weightKg,
+      })
+      .eq('user_id', validated.data.userId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      return c.json({ message: 'Failed to update donor details' }, 500)
+    }
+
+    if (!updatedDonor) {
+      return c.json({ message: 'Donor not found' }, 404)
+    }
+
+    return c.json({ message: 'Donor details updated successfully' })
+  } catch (detailsError) {
+    const message = detailsError instanceof Error ? detailsError.message : 'Unexpected error'
+    return c.json({ message: `Error while updating donor details: ${message}` }, 500)
+  }
 })
