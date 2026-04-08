@@ -48,6 +48,11 @@ const donorDetailsSchema = z.object({
   weightKg: z.coerce.number().gte(50, 'Minimum 50kg required')
 })
 
+const loginSchema = z.object({
+  email: z.email('Invalid email'),
+  password: z.string().min(1, 'Password is required'),
+})
+
 authRoutes.post('/register', async (c) => {
   const supabase = getSupabase(c)
   const payload = await c.req.json()
@@ -149,5 +154,39 @@ authRoutes.post('/register/details', async (c) => {
   } catch (detailsError) {
     const message = detailsError instanceof Error ? detailsError.message : 'Unexpected error'
     return c.json({ message: `Error while updating donor details: ${message}` }, 500)
+  }
+})
+
+authRoutes.post('/login', async (c) => {
+  const supabase = getSupabase(c)
+  const payload = await c.req.json()
+
+  try {
+    const validated = loginSchema.safeParse(payload)
+
+    if (!validated.success) {
+      return c.json(
+        { message: `Invalid login data: ${z.prettifyError(validated.error)}` },
+        400,
+      )
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: validated.data.email,
+      password: validated.data.password,
+    })
+
+    if (error || !data.session || !data.user) {
+      return c.json({ message: 'Invalid email or password' }, 401)
+    }
+
+    return c.json({
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      userId: data.user.id,
+    })
+  } catch (loginError) {
+    const message = loginError instanceof Error ? loginError.message : 'Unexpected error'
+    return c.json({ message: `Error while signing in: ${message}` }, 500)
   }
 })

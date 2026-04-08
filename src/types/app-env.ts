@@ -8,5 +8,6 @@ export type AppEnv = {
   Variables: {
     supabase: SupabaseClient
     user: User
+    accessToken: string
   }
 }
